@@ -706,7 +706,7 @@ func (s *HostSuite) TestLogSinks(t *c.C) {
 
 	// add sink to controller
 	config, err := json.Marshal(&ct.SyslogSinkConfig{
-		URL: fmt.Sprintf("tcp://%s.discoverd:%d", logApp.Name, syslogPort),
+		URL: fmt.Sprintf("syslog://%s.discoverd:%d", logApp.Name, syslogPort),
 	})
 	t.Assert(err, c.IsNil)
 	sink := &ct.Sink{

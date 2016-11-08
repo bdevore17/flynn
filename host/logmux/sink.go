@@ -22,6 +22,7 @@ import (
 	"github.com/flynn/flynn/host/types"
 	"github.com/flynn/flynn/logaggregator/client"
 	"github.com/flynn/flynn/logaggregator/utils"
+	"github.com/flynn/flynn/pkg/dialer"
 	hh "github.com/flynn/flynn/pkg/httphelper"
 	"github.com/flynn/flynn/pkg/lru"
 	"github.com/flynn/flynn/pkg/syslog/rfc6587"
@@ -401,8 +402,7 @@ func (s *LogAggregatorSink) Info() *SinkInfo {
 
 func (s *LogAggregatorSink) Connect() error {
 	// Connect TCP connection to aggregator
-	// TODO(titanous): add dial timeout
-	conn, err := net.Dial("tcp", s.addr)
+	conn, err := dialer.Retry.Dial("tcp", s.addr)
 	if err != nil {
 		return err
 	}
@@ -458,6 +458,7 @@ type SyslogSink struct {
 	url    string
 	prefix string
 
+	mtx          sync.RWMutex
 	cache        *lru.Cache
 	cursor       *utils.HostCursor
 	template     *template.Template
@@ -494,11 +495,14 @@ func NewSyslogSink(sm *SinkManager, info *SinkInfo) (sink *SyslogSink, err error
 }
 
 func (s *SyslogSink) Info() *SinkInfo {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 	config, _ := json.Marshal(ct.SyslogSinkConfig{URL: s.url, Prefix: s.prefix})
 	return &SinkInfo{
 		ID:     s.id,
 		Kind:   ct.SinkKindSyslog,
 		Config: config,
+		Cursor: s.cursor,
 	}
 }
 
@@ -514,9 +518,9 @@ func (s *SyslogSink) Connect() error {
 	addr := net.JoinHostPort(host, port)
 	var conn net.Conn
 	switch u.Scheme {
-	case "tcp":
+	case "syslog":
 		conn, err = net.Dial("tcp", addr)
-	case "tls":
+	case "syslog+tls":
 		tlsConfig := tlsconfig.SecureCiphers(&tls.Config{})
 		conn, err = tls.Dial("tcp", addr, tlsConfig)
 	default:
@@ -530,6 +534,8 @@ func (s *SyslogSink) Connect() error {
 }
 
 func (s *SyslogSink) GetCursor(_ string) (*utils.HostCursor, error) {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
 	return s.cursor, nil
 }
 
@@ -576,7 +582,10 @@ func (s *SyslogSink) Write(m message) error {
 	if err != nil {
 		return err
 	}
+	// Cursor needs to be mutex protected to prevent race when persisting to disk
+	s.mtx.Lock()
 	s.cursor = m.HostCursor
+	s.mtx.Unlock()
 	return nil
 }
 

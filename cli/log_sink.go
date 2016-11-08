@@ -62,7 +62,7 @@ func runLogSinkAddSyslog(args *docopt.Args, client controller.Client) error {
 		return fmt.Errorf("Invalid syslog URL: %s", err)
 	}
 	switch u.Scheme {
-	case "tcp", "tls":
+	case "syslog", "syslog+tls":
 	default:
 		return fmt.Errorf("Invalid syslog protocol: %s", u.Scheme)
 	}

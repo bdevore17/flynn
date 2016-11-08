@@ -187,9 +187,6 @@ func (m *Mux) addSink(sink Sink) {
 								}
 							}
 						}
-						if string(m.MsgID) == "ID3" {
-							continue
-						}
 						// Send message to sink
 						if err := sink.Write(m); err != nil {
 							l.Error("failed to write message to sink", "error", err)

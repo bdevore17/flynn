@@ -676,9 +676,9 @@ func (s *S) TestProviderList(c *C) {
 }
 
 func (s *S) TestCreateSink(c *C) {
-	config, _ := json.Marshal(struct {
-		Addr string `json:"addr"`
-	}{"tcp://example.com:514"})
+	config, _ := json.Marshal(ct.SyslogSinkConfig{
+		URL: "syslog://example.com:514",
+	})
 	in := &ct.Sink{
 		Kind:   ct.SinkKindSyslog,
 		Config: config,
