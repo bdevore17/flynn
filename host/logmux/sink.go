@@ -152,6 +152,7 @@ func (sm *SinkManager) OpenDB() error {
 }
 
 func (sm *SinkManager) CloseDB() error {
+	// Shutdown persistence routine
 	sm.shutdownOnce.Do(func() {
 		close(sm.shutdownCh)
 	})
@@ -159,8 +160,9 @@ func (sm *SinkManager) CloseDB() error {
 	sm.mtx.Lock()
 	defer sm.mtx.Unlock()
 
-	for _, s := range sm.sinks {
+	for id, s := range sm.sinks {
 		s.Shutdown()
+		sm.persistSink(id)
 	}
 
 	if sm.db == nil {
@@ -246,17 +248,18 @@ func (sm *SinkManager) persistSink(id string) error {
 
 func (sm *SinkManager) persistSinks() {
 	sm.logger.Info("starting sink persistence routine")
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-sm.shutdownCh:
 			return
 		case <-ticker.C:
-			sm.logger.Info("persisting sinks")
 			sm.mtx.Lock()
 			for id := range sm.sinks {
-				sm.persistSink(id)
+				if err := sm.persistSink(id); err != nil {
+					log.Warn("error persisting sink", "sink.id", id)
+				}
 			}
 			sm.mtx.Unlock()
 		}
@@ -450,7 +453,7 @@ func (s *LogAggregatorSink) ShutdownCh() chan struct{} {
 }
 
 // SyslogSink is a flexible sink that can connect to TCP/TLS endpoints that use syslog framing.
-// The body of the message can be customised using a template.
+// The prefix of the message can be customised using a template.
 type SyslogSink struct {
 	sm *SinkManager
 
@@ -475,7 +478,7 @@ func NewSyslogSink(sm *SinkManager, info *SinkInfo) (sink *SyslogSink, err error
 	var t *template.Template
 	var cache *lru.Cache
 	if cfg.Prefix != "" {
-		// Initialse the template cache
+		// Initialize the template cache
 		cache = lru.New(1000) // TODO(jpg): Consider configurable?
 		t, err = template.New("").Parse(cfg.Prefix)
 		if err != nil {
@@ -561,7 +564,7 @@ func (s *SyslogSink) Write(m message) error {
 			}
 		}
 		// If not in the cache execute the template and cache the result
-		if len(prefix) == 0 {
+		if prefix == nil {
 			jobID, _ := parseProcID(m.Message.ProcID)
 			job := s.sm.state.GetJob(jobID)
 			if job != nil && job.Job != nil {
