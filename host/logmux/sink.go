@@ -247,7 +247,8 @@ func (sm *SinkManager) persistSink(id string) error {
 }
 
 func (sm *SinkManager) persistSinks() {
-	sm.logger.Info("starting sink persistence routine")
+	log := sm.logger.New("fn", "persistSinks")
+	log.Info("starting sink persistence routine")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {

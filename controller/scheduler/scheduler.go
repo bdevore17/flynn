@@ -357,7 +357,7 @@ func (s *Scheduler) streamSinkEvents() error {
 	}
 }
 
-func (s *Scheduler) Run() error {
+func (s *Scheduler) Run() {
 	log := s.logger.New("fn", "Run")
 	log.Info("starting scheduler loop")
 	defer log.Info("scheduler loop exited")
